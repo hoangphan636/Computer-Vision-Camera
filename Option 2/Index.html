@@ -1,0 +1,626 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Face Recognition Attendance System</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/face-api.js@0.22.2/dist/face-api.min.js"></script>
+    <style>
+        .face-box {
+            position: absolute;
+            border: 2px solid #3B82F6;
+            background-color: rgba(59, 130, 246, 0.2);
+            border-radius: 5px;
+        }
+        .face-label {
+            position: absolute;
+            color: white;
+            background-color: #3B82F6;
+            padding: 2px 5px;
+            border-radius: 3px;
+            font-size: 12px;
+            white-space: nowrap;
+        }
+        #videoContainer {
+            position: relative;
+            width: 100%;
+            max-width: 640px;
+            margin: 0 auto;
+        }
+        #videoElement, #videoElementAttendance {
+            width: 100%;
+            height: auto;
+            border-radius: 8px;
+            transform: scaleX(-1);
+        }
+        .tab-content {
+            display: none;
+        }
+        .tab-content.active {
+            display: block;
+        }
+        .tab-button {
+            transition: all 0.3s ease;
+        }
+        .tab-button.active {
+            background-color: #3B82F6;
+            color: white;
+        }
+        /* Frame for face positioning */
+        .face-guide-frame {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: 70%;
+            height: 70%;
+            border: 3px dashed rgba(255, 255, 255, 0.7);
+            border-radius: 10px;
+            pointer-events: none;
+            z-index: 10;
+        }
+        .face-guide-text {
+            position: absolute;
+            bottom: -40px;
+            width: 100%;
+            text-align: center;
+            color: white;
+            font-weight: bold;
+            text-shadow: 1px 1px 3px rgba(0, 0, 0, 0.8);
+        }
+        .face-position-indicator {
+            position: absolute;
+            width: 100%;
+            text-align: center;
+            top: -30px;
+            color: white;
+            font-weight: bold;
+            text-shadow: 1px 1px 3px rgba(0, 0, 0, 0.8);
+        }
+    </style>
+</head>
+<body class="bg-gray-100 min-h-screen">
+    <div class="container mx-auto px-4 py-8">
+        <h1 class="text-3xl font-bold text-center text-blue-600 mb-8">Face Recognition Attendance System</h1>
+        
+        <div class="flex justify-center mb-6">
+            <button id="registerTab" class="tab-button active px-6 py-2 rounded-l-lg border border-blue-500">Register Face</button>
+            <button id="attendanceTab" class="tab-button px-6 py-2 border-t border-b border-blue-500">Take Attendance</button>
+            <button id="recordsTab" class="tab-button px-6 py-2 rounded-r-lg border border-blue-500">Attendance Records</button>
+        </div>
+        
+        <!-- Register Face Tab -->
+        <div id="registerContent" class="tab-content active bg-white rounded-lg shadow-md p-6 mb-8">
+            <div class="mb-6">
+                <label for="nameInput" class="block text-sm font-medium text-gray-700 mb-2">Enter Name:</label>
+                <input type="text" id="nameInput" class="w-full px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500" placeholder="John Doe">
+            </div>
+            
+            <div id="videoContainer">
+                <video id="videoElement" autoplay muted></video>
+                <div class="face-guide-frame">
+                    <div class="face-guide-text">Position your face inside this frame</div>
+                </div>
+            </div>
+            
+            <div class="flex justify-center mt-6">
+                <button id="registerBtn" class="px-6 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2">
+                    Register Face
+                </button>
+            </div>
+            
+            <div id="registerStatus" class="mt-4 text-center text-sm"></div>
+        </div>
+        
+        <!-- Take Attendance Tab -->
+        <div id="attendanceContent" class="tab-content bg-white rounded-lg shadow-md p-6 mb-8">
+            <div id="videoContainer">
+                <video id="videoElementAttendance" autoplay muted></video>
+                <div class="face-guide-frame">
+                    <div class="face-position-indicator" id="facePositionIndicator">Position your face</div>
+                    <div class="face-guide-text" id="attendanceGuideText">Look straight at the camera</div>
+                </div>
+            </div>
+            
+            <div class="flex justify-center mt-6 space-x-4">
+                <button id="startAttendanceBtn" class="px-6 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2">
+                    Start Attendance
+                </button>
+                <button id="stopAttendanceBtn" class="px-6 py-2 bg-red-600 text-white rounded-md hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-2" disabled>
+                    Stop Attendance
+                </button>
+            </div>
+            
+            <div id="attendanceStatus" class="mt-4 text-center text-sm"></div>
+        </div>
+        
+        <!-- Attendance Records Tab -->
+        <div id="recordsContent" class="tab-content bg-white rounded-lg shadow-md p-6 mb-8">
+            <div class="flex justify-between items-center mb-4">
+                <h2 class="text-xl font-semibold text-gray-800">Attendance Records</h2>
+                <button id="downloadBtn" class="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 text-sm">
+                    Download as CSV
+                </button>
+            </div>
+            
+            <div class="overflow-x-auto">
+                <table class="min-w-full divide-y divide-gray-200">
+                    <thead class="bg-gray-50">
+                        <tr>
+                            <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Name</th>
+                            <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Time</th>
+                            <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Date</th>
+                        </tr>
+                    </thead>
+                    <tbody id="recordsTableBody" class="bg-white divide-y divide-gray-200">
+                        <!-- Records will be populated here -->
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Global variables
+        let registeredFaces = JSON.parse(localStorage.getItem('registeredFaces')) || [];
+        let attendanceRecords = JSON.parse(localStorage.getItem('attendanceRecords')) || [];
+        let isAttendanceRunning = false;
+        let attendanceInterval;
+        let videoStream;
+        
+        // DOM elements
+        const registerTab = document.getElementById('registerTab');
+        const attendanceTab = document.getElementById('attendanceTab');
+        const recordsTab = document.getElementById('recordsTab');
+        const registerContent = document.getElementById('registerContent');
+        const attendanceContent = document.getElementById('attendanceContent');
+        const recordsContent = document.getElementById('recordsContent');
+        const nameInput = document.getElementById('nameInput');
+        const registerBtn = document.getElementById('registerBtn');
+        const registerStatus = document.getElementById('registerStatus');
+        const videoElement = document.getElementById('videoElement');
+        const videoElementAttendance = document.getElementById('videoElementAttendance');
+        const startAttendanceBtn = document.getElementById('startAttendanceBtn');
+        const stopAttendanceBtn = document.getElementById('stopAttendanceBtn');
+        const attendanceStatus = document.getElementById('attendanceStatus');
+        const downloadBtn = document.getElementById('downloadBtn');
+        const recordsTableBody = document.getElementById('recordsTableBody');
+        const facePositionIndicator = document.getElementById('facePositionIndicator');
+        const attendanceGuideText = document.getElementById('attendanceGuideText');
+        
+        // Tab switching
+        registerTab.addEventListener('click', () => {
+            setActiveTab('register');
+            stopAttendance();
+        });
+        
+        attendanceTab.addEventListener('click', () => {
+            setActiveTab('attendance');
+        });
+        
+        recordsTab.addEventListener('click', () => {
+            setActiveTab('records');
+            stopAttendance();
+            updateRecordsTable();
+        });
+        
+        function setActiveTab(tab) {
+            // Reset all tabs
+            [registerTab, attendanceTab, recordsTab].forEach(t => t.classList.remove('active'));
+            [registerContent, attendanceContent, recordsContent].forEach(c => c.classList.remove('active'));
+            
+            // Activate selected tab
+            if (tab === 'register') {
+                registerTab.classList.add('active');
+                registerContent.classList.add('active');
+            } else if (tab === 'attendance') {
+                attendanceTab.classList.add('active');
+                attendanceContent.classList.add('active');
+            } else if (tab === 'records') {
+                recordsTab.classList.add('active');
+                recordsContent.classList.add('active');
+            }
+        }
+        
+        // Initialize face-api.js models
+        async function loadModels() {
+            try {
+                await Promise.all([
+                    faceapi.nets.tinyFaceDetector.loadFromUri('https://justadudewhohacks.github.io/face-api.js/models'),
+                    faceapi.nets.faceLandmark68Net.loadFromUri('https://justadudewhohacks.github.io/face-api.js/models'),
+                    faceapi.nets.faceRecognitionNet.loadFromUri('https://justadudewhohacks.github.io/face-api.js/models'),
+                    faceapi.nets.faceExpressionNet.loadFromUri('https://justadudewhohacks.github.io/face-api.js/models')
+                ]);
+                console.log('Models loaded successfully');
+            } catch (error) {
+                console.error('Error loading models:', error);
+                registerStatus.textContent = 'Error loading face detection models. Please refresh the page.';
+                registerStatus.className = 'text-red-500';
+            }
+        }
+        
+        // Start camera for registration
+        async function startRegistrationCamera() {
+            try {
+                videoStream = await navigator.mediaDevices.getUserMedia({ video: {} });
+                videoElement.srcObject = videoStream;
+            } catch (error) {
+                console.error('Error accessing camera:', error);
+                registerStatus.textContent = 'Could not access camera. Please ensure you have granted camera permissions.';
+                registerStatus.className = 'text-red-500';
+            }
+        }
+        
+        // Start camera for attendance
+        async function startAttendanceCamera() {
+            try {
+                videoStream = await navigator.mediaDevices.getUserMedia({ video: {} });
+                videoElementAttendance.srcObject = videoStream;
+            } catch (error) {
+                console.error('Error accessing camera:', error);
+                attendanceStatus.textContent = 'Could not access camera. Please ensure you have granted camera permissions.';
+                attendanceStatus.className = 'text-red-500';
+            }
+        }
+        
+        // Register face
+        registerBtn.addEventListener('click', async () => {
+            const name = nameInput.value.trim();
+            if (!name) {
+                registerStatus.textContent = 'Please enter a name';
+                registerStatus.className = 'text-red-500';
+                return;
+            }
+            
+            registerStatus.textContent = 'Detecting face...';
+            registerStatus.className = 'text-blue-500';
+            
+            try {
+                // Detect face
+                const detections = await faceapi.detectSingleFace(
+                    videoElement, 
+                    new faceapi.TinyFaceDetectorOptions()
+                ).withFaceLandmarks().withFaceDescriptor();
+                
+                if (!detections) {
+                    registerStatus.textContent = 'No face detected. Please position your face in the camera.';
+                    registerStatus.className = 'text-red-500';
+                    return;
+                }
+                
+                // Check face position
+                const positionFeedback = checkFacePosition(detections, videoElement);
+                if (!positionFeedback.isGoodPosition) {
+                    registerStatus.textContent = positionFeedback.message;
+                    registerStatus.className = 'text-red-500';
+                    return;
+                }
+                
+                // Check if name already exists
+                const existingFace = registeredFaces.find(face => face.name.toLowerCase() === name.toLowerCase());
+                if (existingFace) {
+                    registerStatus.textContent = `Name "${name}" already exists. Please use a different name.`;
+                    registerStatus.className = 'text-red-500';
+                    return;
+                }
+                
+                // Register new face
+                const newFace = {
+                    name: name,
+                    descriptor: Array.from(detections.descriptor)
+                };
+                
+                registeredFaces.push(newFace);
+                localStorage.setItem('registeredFaces', JSON.stringify(registeredFaces));
+                
+                registerStatus.textContent = `Face registered successfully for ${name}!`;
+                registerStatus.className = 'text-green-500';
+                nameInput.value = '';
+            } catch (error) {
+                console.error('Error registering face:', error);
+                registerStatus.textContent = 'Error registering face. Please try again.';
+                registerStatus.className = 'text-red-500';
+            }
+        });
+        
+        // Check if face is properly positioned
+        function checkFacePosition(detection, videoElement) {
+            const videoWidth = videoElement.offsetWidth;
+            const videoHeight = videoElement.offsetHeight;
+            
+            // Calculate dimensions
+            const displaySize = { width: videoWidth, height: videoHeight };
+            const resizedDetection = faceapi.resizeResults(detection, displaySize);
+            
+            const box = resizedDetection.detection.box;
+            const frameWidth = videoWidth * 0.7;
+            const frameHeight = videoHeight * 0.7;
+            const frameLeft = (videoWidth - frameWidth) / 2;
+            const frameTop = (videoHeight - frameHeight) / 2;
+            
+            // Check if face is within the guide frame
+            const isWithinFrame = 
+                box.x >= frameLeft && 
+                box.x + box.width <= frameLeft + frameWidth &&
+                box.y >= frameTop && 
+                box.y + box.height <= frameTop + frameHeight;
+            
+            // Check face size (should be at least 30% of frame width)
+            const minFaceSize = frameWidth * 0.3;
+            const isGoodSize = box.width >= minFaceSize;
+            
+            if (!isWithinFrame) {
+                return {
+                    isGoodPosition: false,
+                    message: 'Please position your face completely inside the guide frame'
+                };
+            }
+            
+            if (!isGoodSize) {
+                return {
+                    isGoodPosition: false,
+                    message: 'Please move closer to the camera'
+                };
+            }
+            
+            return { isGoodPosition: true };
+        }
+        
+        // Start attendance
+        startAttendanceBtn.addEventListener('click', () => {
+            isAttendanceRunning = true;
+            startAttendanceBtn.disabled = true;
+            stopAttendanceBtn.disabled = false;
+            attendanceStatus.textContent = 'Attendance system is running...';
+            attendanceStatus.className = 'text-green-500';
+            
+            // Clear any existing face boxes
+            clearFaceBoxes();
+            
+            // Start detection interval
+            attendanceInterval = setInterval(detectAttendanceFaces, 1000);
+        });
+        
+        // Stop attendance
+        stopAttendanceBtn.addEventListener('click', stopAttendance);
+        
+        function stopAttendance() {
+            isAttendanceRunning = false;
+            startAttendanceBtn.disabled = false;
+            stopAttendanceBtn.disabled = true;
+            clearInterval(attendanceInterval);
+            attendanceStatus.textContent = 'Attendance system stopped.';
+            attendanceStatus.className = 'text-gray-500';
+            
+            // Clear any existing face boxes
+            clearFaceBoxes();
+            
+            // Reset guide text
+            facePositionIndicator.textContent = 'Position your face';
+            facePositionIndicator.style.color = 'white';
+            attendanceGuideText.textContent = 'Look straight at the camera';
+        }
+        
+        // Detect faces for attendance
+        async function detectAttendanceFaces() {
+            if (!isAttendanceRunning) return;
+            
+            try {
+                // Detect all faces
+                const detections = await faceapi.detectAllFaces(
+                    videoElementAttendance, 
+                    new faceapi.TinyFaceDetectorOptions()
+                ).withFaceLandmarks().withFaceDescriptors();
+                
+                // Clear previous face boxes
+                clearFaceBoxes();
+                
+                // For each detected face
+                for (const detection of detections) {
+                    // Check face position
+                    const positionFeedback = checkFacePosition(detection, videoElementAttendance);
+                    
+                    // Update position indicator
+                    if (positionFeedback.isGoodPosition) {
+                        facePositionIndicator.textContent = 'Good position';
+                        facePositionIndicator.style.color = '#10B981'; // Green
+                        attendanceGuideText.textContent = 'Processing...';
+                    } else {
+                        facePositionIndicator.textContent = positionFeedback.message;
+                        facePositionIndicator.style.color = '#EF4444'; // Red
+                        attendanceGuideText.textContent = 'Adjust your position';
+                        continue; // Skip processing if not in good position
+                    }
+                    
+                    // Find the best match
+                    const bestMatch = findBestMatch(detection.descriptor);
+                    
+                    // Draw face box and label
+                    drawFaceBox(detection, bestMatch);
+                    
+                    // If we have a match with high enough confidence, record attendance
+                    if (bestMatch && bestMatch.distance < 0.5) {
+                        recordAttendance(bestMatch.name);
+                        attendanceGuideText.textContent = `Recognized: ${bestMatch.name}`;
+                    } else if (bestMatch) {
+                        attendanceGuideText.textContent = 'Unknown person';
+                    }
+                }
+            } catch (error) {
+                console.error('Error detecting faces:', error);
+            }
+        }
+        
+        // Find best match for a face descriptor
+        function findBestMatch(descriptor) {
+            if (registeredFaces.length === 0) return null;
+            
+            let bestMatch = null;
+            let minDistance = Infinity;
+            
+            // Convert descriptor to Float32Array
+            const queryDescriptor = new Float32Array(descriptor);
+            
+            // Compare with all registered faces
+            for (const face of registeredFaces) {
+                const faceDescriptor = new Float32Array(face.descriptor);
+                const distance = faceapi.euclideanDistance(queryDescriptor, faceDescriptor);
+                
+                if (distance < minDistance) {
+                    minDistance = distance;
+                    bestMatch = {
+                        name: face.name,
+                        distance: distance
+                    };
+                }
+            }
+            
+            return bestMatch;
+        }
+        
+        // Draw face box and label
+        function drawFaceBox(detection, match) {
+            const video = videoElementAttendance;
+            const videoWidth = video.offsetWidth;
+            const videoHeight = video.offsetHeight;
+            
+            // Calculate dimensions
+            const displaySize = { width: videoWidth, height: videoHeight };
+            const resizedDetections = faceapi.resizeResults(detection, displaySize);
+            
+            // Create face box
+            const box = resizedDetections.detection.box;
+            const faceBox = document.createElement('div');
+            faceBox.className = 'face-box';
+            faceBox.style.left = `${box.x}px`;
+            faceBox.style.top = `${box.y}px`;
+            faceBox.style.width = `${box.width}px`;
+            faceBox.style.height = `${box.height}px`;
+            
+            // Create label
+            const faceLabel = document.createElement('div');
+            faceLabel.className = 'face-label';
+            
+            if (match && match.distance < 0.5) {
+                faceLabel.textContent = `${match.name} (${match.distance.toFixed(2)})`;
+                faceLabel.style.backgroundColor = '#10B981'; // Green for recognized
+            } else {
+                faceLabel.textContent = 'Unknown';
+                faceLabel.style.backgroundColor = '#EF4444'; // Red for unknown
+            }
+            
+            faceLabel.style.left = `${box.x}px`;
+            faceLabel.style.top = `${box.y - 20}px`;
+            
+            // Add to video container
+            const videoContainer = document.querySelector('#videoContainer');
+            videoContainer.appendChild(faceBox);
+            videoContainer.appendChild(faceLabel);
+        }
+        
+        // Clear all face boxes
+        function clearFaceBoxes() {
+            const faceBoxes = document.querySelectorAll('.face-box, .face-label');
+            faceBoxes.forEach(box => box.remove());
+        }
+        
+        // Record attendance
+        function recordAttendance(name) {
+            // Check if this person has already been recorded in the last minute
+            const now = new Date();
+            const oneMinuteAgo = new Date(now.getTime() - 60000);
+            
+            const recentRecord = attendanceRecords.find(record => 
+                record.name === name && new Date(record.timestamp) > oneMinuteAgo
+            );
+            
+            if (recentRecord) return; // Skip if already recorded recently
+            
+            // Add new record
+            const newRecord = {
+                name: name,
+                timestamp: now.toISOString(),
+                date: now.toLocaleDateString(),
+                time: now.toLocaleTimeString()
+            };
+            
+            attendanceRecords.push(newRecord);
+            localStorage.setItem('attendanceRecords', JSON.stringify(attendanceRecords));
+            
+            // Update attendance status
+            attendanceStatus.textContent = `Attendance recorded for ${name} at ${newRecord.time}`;
+            attendanceStatus.className = 'text-green-500';
+        }
+        
+        // Update records table
+        function updateRecordsTable() {
+            recordsTableBody.innerHTML = '';
+            
+            // Sort records by timestamp (newest first)
+            const sortedRecords = [...attendanceRecords].sort((a, b) => 
+                new Date(b.timestamp) - new Date(a.timestamp)
+            );
+            
+            // Add records to table
+            for (const record of sortedRecords) {
+                const row = document.createElement('tr');
+                row.innerHTML = `
+                    <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">${record.name}</td>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">${record.time}</td>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">${record.date}</td>
+                `;
+                recordsTableBody.appendChild(row);
+            }
+        }
+        
+        // Download attendance records as CSV
+        downloadBtn.addEventListener('click', () => {
+            if (attendanceRecords.length === 0) {
+                alert('No attendance records to download.');
+                return;
+            }
+            
+            // Create CSV content
+            let csvContent = "Name,Time,Date\n";
+            
+            for (const record of attendanceRecords) {
+                csvContent += `${record.name},${record.time},${record.date}\n`;
+            }
+            
+            // Create download link
+            const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+            const url = URL.createObjectURL(blob);
+            const link = document.createElement('a');
+            link.setAttribute('href', url);
+            link.setAttribute('download', `attendance_records_${new Date().toISOString().slice(0, 10)}.csv`);
+            link.style.visibility = 'hidden';
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+        });
+        
+        // Initialize the app
+        async function init() {
+            await loadModels();
+            await startRegistrationCamera();
+            setActiveTab('register');
+            updateRecordsTable();
+            
+            // When switching to attendance tab, start the attendance camera
+            attendanceTab.addEventListener('click', startAttendanceCamera);
+        }
+        
+        // Start the app
+        init();
+        
+        // Clean up when page is unloaded
+        window.addEventListener('beforeunload', () => {
+            if (videoStream) {
+                videoStream.getTracks().forEach(track => track.stop());
+            }
+            stopAttendance();
+        });
+    </script>
+</body>
+</html>
